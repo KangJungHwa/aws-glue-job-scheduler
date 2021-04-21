@@ -1,0 +1,75 @@
+spring:
+  application:
+    name: GMAIL-MIGRATOR
+
+  #################
+  ## JPA
+  #################
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+      use-new-id-generator-mappings: false
+    generate-ddl: false
+    show-sql: true
+    properties:
+      hibernate.hbm2ddl.import_files_sql_extractor: org.hibernate.tool.hbm2ddl.MultipleLinesSqlCommandExtractor
+      hibernate.default_batch_fetch_size: ${chunkSize:1000}
+      hibernate:
+        jdbc:
+          lob:
+            non_contextual_creation: true
+    open-in-view: false
+    database: mysql
+
+  #################
+  ## DataSource
+  #################
+
+  datasource:
+    #url: jdbc:postgresql://localhost:5432/test
+    #driver-class-name: org.postgresql.Driver
+    #username: postgres
+    #password: postgres
+    url: jdbc:log4jdbc:mysql://localhost:3306/test?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+    driver-class-name: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
+    username: root
+    password: root
+    sql-script-encoding: UTF-8
+    continue-on-error: true
+    initialization-mode: always
+    hikari:
+      connection-test-query: SELECT 1
+      maximum-pool-size: 10
+      max-lifetime: 1800000
+      minimum-idle: 10
+      idle-timeout: 600000
+
+  #################
+  ## Auto Configure
+  #################
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration
+
+###################
+## Web Container
+###################
+
+server:
+  port: 8888
+  address: 0.0.0.0
+
+#################
+## Application
+#################
+
+app:
+
+#################
+## Logging
+#################
+
+logging:
+  config: src/main/resources/logback-local.xml
