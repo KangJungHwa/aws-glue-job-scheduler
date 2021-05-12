@@ -31,7 +31,7 @@ spring:
     #driver-class-name: org.postgresql.Driver
     #username: postgres
     #password: postgres
-    url: jdbc:log4jdbc:mysql://localhost:3306/test?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+    url: jdbc:log4jdbc:mysql://localhost:3306/glue?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
     driver-class-name: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
     username: root
     password: root
@@ -58,7 +58,7 @@ spring:
 ###################
 
 server:
-  port: 8888
+  port: 8889
   address: 0.0.0.0
 
 #################

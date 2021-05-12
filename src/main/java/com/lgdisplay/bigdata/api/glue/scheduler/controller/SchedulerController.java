@@ -1,10 +1,18 @@
 package com.lgdisplay.bigdata.api.glue.scheduler.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lgdisplay.bigdata.api.glue.scheduler.jobs.StartJob;
+import com.lgdisplay.bigdata.api.glue.scheduler.model.Run;
+import com.lgdisplay.bigdata.api.glue.scheduler.model.http.StartJobRunRequest;
+import com.lgdisplay.bigdata.api.glue.scheduler.repository.RunRepository;
 import com.lgdisplay.bigdata.api.glue.scheduler.service.QuartzSchedulerService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
+import org.quartz.*;
+import org.quartz.impl.StdSchedulerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -22,7 +30,52 @@ import java.util.Map;
 public class SchedulerController extends DefaultController {
 
     @Autowired
+    RunRepository runRepository;
+
+    @Autowired
     QuartzSchedulerService schedulerService;
+
+    @Autowired
+    @Qualifier("mapper")
+    ObjectMapper mapper;
+
+    @PostMapping("/startJobRun")
+    public ResponseEntity startJobRun(@RequestBody Map params) throws Exception  {
+        log.info("{}", params);
+        String jobRunId=params.get("jobRunId").toString();
+        StartJobRunRequest startJobRunRequest = mapper.readValue(params.get("body").toString(), StartJobRunRequest.class);
+
+        Run startJobRun = Run.builder()
+                .jobRunId(jobRunId)
+                .jobName(startJobRunRequest.getJobName())
+                .arguments(params.get("arguments").toString())
+                .jobRunState("START")
+                .body(params.get("body").toString()).build();
+        runRepository.save(startJobRun);
+        //TODO
+        // 아래에서 JOB 실행시키고 STATE 코드 RUNNING FINISH 업데이트 시키는 로직추가
+        JobKey jobKey = new JobKey("startJob", "Groupe1");
+        JobDetail jobDetail = JobBuilder.newJob(StartJob.class).withIdentity(jobKey).build();
+
+        Scheduler scheduler = new StdSchedulerFactory().getScheduler();
+        scheduler.clear();
+        scheduler.start();
+
+        //TODO
+        // 아래의 Job Name과 group 스케줄 가져오는 메소드를 서비스 클래스에서 정의 한다.
+        CronTrigger trigger = TriggerBuilder.newTrigger()
+                .withIdentity("startJob", "Groupe1")
+                .withSchedule(CronScheduleBuilder.cronSchedule("0/3 * * * * ?"))
+                .build();
+
+        scheduler.scheduleJob(jobDetail, trigger);
+
+
+        return ResponseEntity.ok(jobRunId);
+    }
+
+
+
 
     @PostMapping("/job")
     @ApiOperation(value = "Job 등록", notes = "Job을 등록합니다.")
