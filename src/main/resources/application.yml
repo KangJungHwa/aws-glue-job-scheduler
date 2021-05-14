@@ -45,6 +45,7 @@ spring:
       minimum-idle: 10
       idle-timeout: 600000
 
+
   #################
   ## Auto Configure
   #################
@@ -73,3 +74,4 @@ app:
 
 logging:
   config: src/main/resources/logback-local.xml
+
