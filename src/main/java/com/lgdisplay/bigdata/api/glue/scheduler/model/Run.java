@@ -29,6 +29,12 @@ public class Run {
     @Column(name = "job_run_state", columnDefinition = "VARCHAR(2000)", nullable = true)
     String jobRunState;
 
+    @Column(name = "user_name", columnDefinition = "VARCHAR(255)", nullable = true)
+    String userName;
+
+    @Column(name = "trigger_id", columnDefinition = "VARCHAR(255)")
+    String triggerId;
+
     @Lob
     @Type(type = "org.hibernate.type.TextType")
     @Column(name = "body", nullable = true)

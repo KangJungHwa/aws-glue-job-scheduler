@@ -20,6 +20,8 @@ public class StartJob implements Job {
         ProcessBuilder processBuilder = new ProcessBuilder();
 
         try {
+            //job 실행시 glue 트리거 테이블 조회해서
+            // action 필드에 있는 json을 읽어서 리스트의 job 항목을 실행한다.
             log.info(">>>>>>>>>>>>> 여기가 호출되면 된다  : "+context.getJobDetail());
             log.info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>start");
             Thread.sleep(10000);

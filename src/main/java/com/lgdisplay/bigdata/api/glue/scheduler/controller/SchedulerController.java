@@ -1,8 +1,10 @@
 package com.lgdisplay.bigdata.api.glue.scheduler.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lgdisplay.bigdata.api.glue.scheduler.jobs.StartJob;
 import com.lgdisplay.bigdata.api.glue.scheduler.model.Run;
+import com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger;
 import com.lgdisplay.bigdata.api.glue.scheduler.model.http.StartJobRunRequest;
 import com.lgdisplay.bigdata.api.glue.scheduler.service.QuartzSchedulerService;
 import io.swagger.annotations.Api;
@@ -40,26 +42,6 @@ public class SchedulerController extends DefaultController {
     @Qualifier("mapper")
     ObjectMapper mapper;
 
-    @PostMapping("/startJobRun")
-    public ResponseEntity startJobRun(HttpServletRequest request,@RequestBody Map params) throws Exception  {
-        log.info("{}", params);
-        String jobRunId=params.get("jobRunId").toString();
-        StartJobRunRequest startJobRunRequest = mapper.readValue(params.get("body").toString(), StartJobRunRequest.class);
-
-        Run startJobRun = Run.builder()
-                .jobRunId(jobRunId)
-                .jobName(startJobRunRequest.getJobName())
-                .arguments(params.get("arguments").toString())
-                .jobRunState("START")
-                .body(params.get("body").toString()).build();
-
-        //TODO
-        // 아래에서 JOB 실행시키고 STATE 코드 RUNNING FINISH 업데이트 시키는 로직추가
-        schedulerService.startJob(startJobRun);
-        schedulerService.registAndStartJob(startJobRun);
-        return ResponseEntity.ok(jobRunId);
-    }
-
     @PostMapping("/job")
     @ApiOperation(value = "Job 등록", notes = "Job을 등록합니다.")
     public ResponseEntity add(HttpServletRequest request, @RequestBody Map params) throws SchedulerException {
@@ -73,7 +55,91 @@ public class SchedulerController extends DefaultController {
         return ResponseEntity.ok(_true());
     }
 
-    /*job 수정은 glue table만 한다.*/
+    @PostMapping("/start/job")
+    @ApiOperation(value = "Job 시작", notes = "Job을 한번만 실행합니다.")
+    public ResponseEntity startJobRun(HttpServletRequest request,@RequestBody Map params) throws Exception  {
+        log.info("{}", params);
+        String jobRunId=params.get("jobRunId").toString();
+        StartJobRunRequest startJobRunRequest = mapper.readValue(params.get("body").toString(), StartJobRunRequest.class);
+
+        Run startJobRun = Run.builder()
+                .jobRunId(jobRunId)
+                .jobName(startJobRunRequest.getJobName())
+                .arguments(params.get("arguments").toString())
+                .jobRunState("STARTED")
+                .userName(params.get("userName").toString())
+                .body(params.get("body").toString()).build();
+
+        //TODO
+        // 아래에서 JOB 실행시키고 STATE 코드 RUNNING FINISH 업데이트 시키는 로직추가
+        try {
+            //RUN 테이블 저장
+            schedulerService.saveRun(startJobRun);
+            //QUARTZ TRIGGER 테이블 저장
+            schedulerService.startJobRun(startJobRun);
+            startJobRun.setJobRunState("COMPLETE");
+            schedulerService.saveRun(startJobRun);
+        } catch (Exception e) {
+            startJobRun.setJobRunState("FAILED");
+            schedulerService.saveRun(startJobRun);
+        }
+
+        return ResponseEntity.ok(jobRunId);
+    }
+
+    @PostMapping("/trigger")
+    @ApiOperation(value = "Trigger 등록", notes = "Trigger을 등록합니다.")
+    public ResponseEntity addTrigger(HttpServletRequest request, @RequestBody Map<String,String> params) throws SchedulerException, JsonProcessingException {
+
+        String triggerId=schedulerService.addTrigger(params);
+        String jobRunId = "JOB_" + System.currentTimeMillis();
+
+        Run startJobRun = Run.builder()
+                .jobRunId(jobRunId)
+                .jobName(params.get("jobName"))
+                .jobRunState("RUNNING")
+                .triggerId(triggerId)
+                .userName(params.get("userName").toUpperCase())
+                .build();
+        schedulerService.saveRun(startJobRun);
+        return ResponseEntity.ok(_true());
+    }
+
+    @DeleteMapping("/trigger/{triggerId}")
+    @ApiOperation(value = "Trigger 삭제", notes = "Trigger을 삭제합니다.")
+    public ResponseEntity delTrigger(HttpServletRequest request,  @PathVariable("triggerId") String triggerId) throws SchedulerException, JsonProcessingException {
+        schedulerService.stopTrigger(triggerId);
+//        Trigger trigger=schedulerService.getTrigger(triggerId);
+//
+//
+//
+//        Run stopJobRun = Run.builder()
+//                .jobRunId(jobRunId)
+//                .jobName(trigger.getJobName())
+//                .jobRunState("STOPED")
+//                .userName(trigger.getUserName())
+//                .build();
+//        schedulerService.saveRun(stopJobRun);
+//        schedulerService.delGlueTrigger(stopJobRun);
+        return ResponseEntity.ok(_true());
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /*
+     *job 수정은 glue table만 한다.
+     * 수정컬럼이 존재하지 않음.
+     * */
     @PostMapping("/job/update/{jobId}")
     @ApiOperation(value = "Job 수정", notes = "Job을 수정합니다.")
     public ResponseEntity update(HttpServletRequest request, @PathVariable("jobId") Long jobId) throws SchedulerException {
@@ -122,18 +188,7 @@ public class SchedulerController extends DefaultController {
         return ResponseEntity.ok(_true());
     }
 
-    @PostMapping("/trigger")
-    @ApiOperation(value = "Trigger 등록", notes = "Trigger을 등록합니다.")
-    public ResponseEntity addTrigger(HttpServletRequest request, @RequestBody Map params) throws SchedulerException {
-        String jobName=params.get("jobName").toString();
-        String userName=params.get("userName").toString();
-        if (jobName==null) {
-            log.warn("요청을 처리하기 위해서 필요한 jobId가 존재하지 않습니다.");
-            return ResponseEntity.ok(_false());
-        }
-        String returnVal=schedulerService.addJob(userName, jobName);
-        return ResponseEntity.ok(_true());
-    }
+
 
     /*
      * job에 해당하는 모든 스케중 중지

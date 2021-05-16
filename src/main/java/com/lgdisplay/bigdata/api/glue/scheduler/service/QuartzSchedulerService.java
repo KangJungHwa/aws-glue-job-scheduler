@@ -1,29 +1,28 @@
 package com.lgdisplay.bigdata.api.glue.scheduler.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lgdisplay.bigdata.api.glue.scheduler.jobs.StartJob;
 import com.lgdisplay.bigdata.api.glue.scheduler.model.Job;
 import com.lgdisplay.bigdata.api.glue.scheduler.model.Run;
-import com.lgdisplay.bigdata.api.glue.scheduler.model.http.StartJobRunRequest;
+
 import com.lgdisplay.bigdata.api.glue.scheduler.repository.JobRepository;
 import com.lgdisplay.bigdata.api.glue.scheduler.repository.RunRepository;
 import com.lgdisplay.bigdata.api.glue.scheduler.repository.TriggerRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang.StringUtils;
 import org.quartz.*;
-import org.quartz.impl.StdSchedulerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /*
 * id를 가지고 job 정보를 가지고 와서 실행을 시킨다.
 * 실행시킨 후 정보 업데이트 해준다.
  */
-
 
 @Service
 @Slf4j
@@ -44,59 +43,40 @@ public class QuartzSchedulerService {
     @Autowired
     private QuartzSchedulerService quartzSchedulerService;
 
+    @Autowired
+    @Qualifier("mapper")
+    ObjectMapper mapper;
 
-    public String  startJob(Run run) {
+    public String  saveRun(Run run) {
         runRepository.save(run);
         return run.getJobRunId();
     }
 
-    public String registAndStartJob(Run run) throws SchedulerException {
+    public String startJobRun(Run run) throws SchedulerException {
         Scheduler scheduler = schedulerFactoryBean.getScheduler();
 
         JobKey jobKey=new JobKey(run.getJobName(),"Group");
-        Optional<String> cronTab = triggerRepository.findCronExpression(run.getJobName());
-        if (!cronTab.isPresent()) {
-            log.error("crontab Expression Not Found !");
-            return "crontab Expression Not Found !";
-        }
-        String cronStr=cronTab.get();
-        cronStr = cronStr.replace("cron(", "").replace(")", "");
 
-        JobDetail jobDetail = JobBuilder
-                .newJob(StartJob.class)
-                .withIdentity(jobKey)
-                .storeDurably()
+        Trigger trigger = TriggerBuilder.newTrigger()
+                .withIdentity(run.getJobName(), run.getUserName())
+                .startNow()
+                .forJob(JobKey.jobKey(run.getJobName(), run.getUserName()))
                 .build();
 
-        CronTrigger trigger = TriggerBuilder.newTrigger()
-                .withIdentity(run.getJobName(), "Group")
-                .withSchedule(CronScheduleBuilder.cronSchedule(cronStr))
-                .build();
-
-
-        scheduler.scheduleJob(jobDetail, trigger);
+        scheduler.scheduleJob(trigger);
 
         return run.getJobRunId();
     }
 
-    public String  createJob(String userName,String jobName) {
+    //job테이블에 삭제 하고 스케줄링이 걸려 있다면 스케줄링도 삭제 한다.
+    public String deleteJob(Long jobId) throws SchedulerException {
         Scheduler scheduler = schedulerFactoryBean.getScheduler();
-        try {
-            Optional<Job> job = jobRepository.findByUsernameAndJobName(userName, jobName);
-            if (!job.isPresent()) {
-                return "JOB_NOT_FOUND";
-            }
-            JobKey jobKey = new JobKey(jobName, "GROUP");
-            JobDetail jobDetail = JobBuilder
-                    .newJob(StartJob.class)
-                    .withIdentity(jobKey)
-                    .storeDurably()
-                    .build();
-
-            scheduler.addJob(jobDetail,true);
-        } catch (Exception e) {
-            log.error(e.getMessage());
+        Optional<Job> job = jobRepository.findById(jobId);
+        if (!job.isPresent()) {
+            return "JOB_NOT_FOUND";
         }
+        JobKey jobKey = new JobKey(job.get().getJobName(), "GROUP");
+        scheduler.deleteJob(jobKey);
         return"jobName";
     }
 
@@ -123,7 +103,15 @@ public class QuartzSchedulerService {
         if (!job.isPresent()) {
             return "JOB_NOT_FOUND";
         }
-        JobKey jobKey = new JobKey(jobName, "GROUP");
+
+        /*
+        GLUE에는 JOB GROUP 개념이 없고
+        사용자별로 동일한 JOB을 가질수 있어야 하기때문에
+        QUARTZ의 JOB 테이블의 KEY가 JOBNAME,GROUP이기 때문에
+        GROUP에 사용자 명을 넣음
+        */
+        Job jobInfo=job.get();
+        JobKey jobKey = new JobKey(jobName, jobInfo.getUsername());
         JobDetail jobDetail = JobBuilder
                 .newJob(StartJob.class)
                 .withIdentity(jobKey)
@@ -134,20 +122,62 @@ public class QuartzSchedulerService {
         return"jobName";
     }
 
-    //TODO 수정 및 테스트
-    //이미 저장된 job의 트리거를 등록한다.
-    public String addTrigger(String userName,String jobName) throws SchedulerException {
+    // 저장된 job의 트리거를 등록한다.
+    public String addTrigger(Map<String,String> paramMap) throws SchedulerException, JsonProcessingException {
         Scheduler scheduler = schedulerFactoryBean.getScheduler();
-        Optional<Job> job = jobRepository.findByUsernameAndJobName(userName,jobName);
-        JobKey jobKey = new JobKey(job.get().getJobName(), "GROUP");
-        Trigger trigger = TriggerBuilder.newTrigger()
-                .withIdentity("trigger1", "group1")
-                .startNow()
+        Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> trigger
+                = triggerRepository.findByName(paramMap.get("triggerName"));
+
+        if (!trigger.isPresent()) {
+            log.error("Trigger Not Found !");
+            return "FAIL";
+        }
+        Optional<Run> run = runRepository.findByTriggerId(trigger.get().getTriggerId());
+        if (!trigger.isPresent()) {
+            if (run.get().getJobRunState().equals("RUNNING")) {
+                log.error("Trigger is already running !");
+                return "FAIL";
+            }
+        }
+        String cronStr=trigger.get().getSchedule();
+
+        cronStr = cronStr.replace("cron(", "").replace(")", "");
+        JobKey jobKey = new JobKey(trigger.get().getJobName(), trigger.get().getUserName());
+        CronTrigger cronTrigger = TriggerBuilder.newTrigger()
+                .withIdentity(paramMap.get("triggerName"),paramMap.get("userName").toUpperCase())
+                .withSchedule(CronScheduleBuilder.cronSchedule(cronStr))
                 .forJob(jobKey)
                 .build();
-        scheduler.scheduleJob(trigger);
+
+        scheduler.scheduleJob(cronTrigger);
+        return trigger.get().getTriggerId();
+    }
+
+
+    public String stopTrigger(String triggerId) throws SchedulerException, JsonProcessingException {
+        Scheduler scheduler = schedulerFactoryBean.getScheduler();
+        try {
+
+            Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> triggerById
+                    = triggerRepository.findById(triggerId);
+            if (!triggerById.isPresent()) {
+                return "FAIL";
+            }
+            com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger=triggerById.get();
+            scheduler.unscheduleJob(TriggerKey.triggerKey(trigger.getName(), trigger.getUserName()));
+            Optional<Run> runByTriggerId = runRepository.findByTriggerId(triggerId);
+            Run run = runByTriggerId.get();
+            run.setJobRunState("STOPED");
+            runRepository.save(run);
+            trigger.setTriggerState("STOPED");
+            triggerRepository.save(trigger);
+
+        } catch (Exception e) {
+            log.error(e.getMessage());
+        }
         return"jobName";
     }
+
 
     //TODO 수정 및 테스트
     //트리거를 수정한다.
@@ -170,20 +200,11 @@ public class QuartzSchedulerService {
         return"jobName";
     }
 
-
-    //job테이블에 삭제 하고 스케줄링이 걸려 있다면 스케줄링도 삭제 한다.
-    public String deleteJob(Long jobId) throws SchedulerException {
-        Scheduler scheduler = schedulerFactoryBean.getScheduler();
-        Optional<Job> job = jobRepository.findById(jobId);
-        if (!job.isPresent()) {
-            return "JOB_NOT_FOUND";
-        }
-        JobKey jobKey = new JobKey(job.get().getJobName(), "GROUP");
-        scheduler.deleteJob(jobKey);
-        return"jobName";
+    public com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger getTrigger(String TriggerId) {
+        Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> byId = triggerRepository.findById(TriggerId);
+        com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger = byId.get();
+        return trigger;
     }
-
-
 
 
 //    public JobEntity getJobEntityById(Integer id) {
@@ -249,6 +270,4 @@ public class QuartzSchedulerService {
 //    public JobKey getJobKey(JobEntity job) {
 //        return JobKey.jobKey(job.getName(), job.getJobGroup());
 //    }
-
-
 }

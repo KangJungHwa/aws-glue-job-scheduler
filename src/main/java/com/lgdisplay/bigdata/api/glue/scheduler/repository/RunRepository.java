@@ -19,4 +19,6 @@ public interface RunRepository extends CrudRepository<Run, String> {
 
     Optional<List<Run>> findByJobName(String jobName);
 
+    Optional<Run> findByTriggerId(String triggerId);
+
 }

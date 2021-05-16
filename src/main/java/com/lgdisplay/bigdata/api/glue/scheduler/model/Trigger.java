@@ -16,18 +16,12 @@ import javax.persistence.Lob;
 @Entity(name = "api_glue_trigger")
 public class Trigger {
 
-
     @Id
     @Column(name = "trigger_id", columnDefinition = "VARCHAR(255)")
     String triggerId;
 
     @Column(name = "name",columnDefinition = "VARCHAR(255)")
     String name;
-
-    @Lob
-    @Type(type = "org.hibernate.type.TextType")
-    @Column(name = "actions")
-    private String actions;
 
     @Column(name = "description", columnDefinition = "VARCHAR(255)", nullable = true)
     private String description;
@@ -41,9 +35,17 @@ public class Trigger {
     @Column(name = "type", columnDefinition = "VARCHAR(255)")
     private String type;
 
-
     @Column(name = "workflow_name", columnDefinition = "VARCHAR(255)")
     private String workflowName;
+
+    @Column(name = "job_name", columnDefinition = "VARCHAR(255)")
+    private String jobName;
+
+    @Column(name = "userName", columnDefinition = "VARCHAR(255)")
+    private String userName;
+
+    @Column(name = "trigger_state", columnDefinition = "VARCHAR(255)")
+    private String triggerState;
 
     @Lob
     @Type(type = "org.hibernate.type.TextType")
