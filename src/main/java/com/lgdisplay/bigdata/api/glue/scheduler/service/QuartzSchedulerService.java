@@ -178,6 +178,33 @@ public class QuartzSchedulerService {
         return"jobName";
     }
 
+    public String deleteTrigger(String triggerId) throws SchedulerException, JsonProcessingException {
+        Scheduler scheduler = schedulerFactoryBean.getScheduler();
+        try {
+
+            Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> triggerById
+                    = triggerRepository.findById(triggerId);
+            if (!triggerById.isPresent()) {
+                return "FAIL";
+            }
+            com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger=triggerById.get();
+            if(trigger.getTriggerState().equals("RUNNING")) {
+                scheduler.unscheduleJob(TriggerKey.triggerKey(trigger.getName(), trigger.getUserName()));
+                Optional<Run> runByTriggerId = runRepository.findByTriggerId(triggerId);
+                Run run = runByTriggerId.get();
+                run.setJobRunState("DELETED");
+                runRepository.save(run);
+            }
+
+            triggerRepository.delete(trigger);
+
+        } catch (Exception e) {
+            log.error(e.getMessage());
+        }
+        return"jobName";
+    }
+
+
 
     //TODO 수정 및 테스트
     //트리거를 수정한다.

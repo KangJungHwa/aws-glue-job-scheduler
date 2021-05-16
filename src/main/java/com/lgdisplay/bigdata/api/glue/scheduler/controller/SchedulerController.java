@@ -42,6 +42,8 @@ public class SchedulerController extends DefaultController {
     @Qualifier("mapper")
     ObjectMapper mapper;
 
+
+    /*완료*/
     @PostMapping("/job")
     @ApiOperation(value = "Job 등록", notes = "Job을 등록합니다.")
     public ResponseEntity add(HttpServletRequest request, @RequestBody Map params) throws SchedulerException {
@@ -55,6 +57,7 @@ public class SchedulerController extends DefaultController {
         return ResponseEntity.ok(_true());
     }
 
+    /*완료*/
     @PostMapping("/start/job")
     @ApiOperation(value = "Job 시작", notes = "Job을 한번만 실행합니다.")
     public ResponseEntity startJobRun(HttpServletRequest request,@RequestBody Map params) throws Exception  {
@@ -87,6 +90,7 @@ public class SchedulerController extends DefaultController {
         return ResponseEntity.ok(jobRunId);
     }
 
+    /*완료*/
     @PostMapping("/trigger")
     @ApiOperation(value = "Trigger 등록", notes = "Trigger을 등록합니다.")
     public ResponseEntity addTrigger(HttpServletRequest request, @RequestBody Map<String,String> params) throws SchedulerException, JsonProcessingException {
@@ -108,19 +112,7 @@ public class SchedulerController extends DefaultController {
     @DeleteMapping("/trigger/{triggerId}")
     @ApiOperation(value = "Trigger 삭제", notes = "Trigger을 삭제합니다.")
     public ResponseEntity delTrigger(HttpServletRequest request,  @PathVariable("triggerId") String triggerId) throws SchedulerException, JsonProcessingException {
-        schedulerService.stopTrigger(triggerId);
-//        Trigger trigger=schedulerService.getTrigger(triggerId);
-//
-//
-//
-//        Run stopJobRun = Run.builder()
-//                .jobRunId(jobRunId)
-//                .jobName(trigger.getJobName())
-//                .jobRunState("STOPED")
-//                .userName(trigger.getUserName())
-//                .build();
-//        schedulerService.saveRun(stopJobRun);
-//        schedulerService.delGlueTrigger(stopJobRun);
+        schedulerService.deleteTrigger(triggerId);
         return ResponseEntity.ok(_true());
     }
 
