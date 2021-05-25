@@ -19,4 +19,12 @@ public interface JobRepository extends CrudRepository<Job, Long> {
     Optional<List<Job>> findJobsByUsername(String username);
 
     List<Job> findByJobNameIn(List<String> jobname);
+
+    @Query(value= " select B.* from "+
+            " (select JSONB_ARRAY_ELEMENTS(body::::jsonb->'Actions')->>'JobName' as job_name  " +
+            "    from api_glue_trigger where NAME = :triggerName) A, "+
+            " api_glue_job B " +
+            " where a.job_name=b.job_name",
+            nativeQuery = true)
+    List<Job> findJobNameByTriggerNameParamsNative(@Param("triggerName") String triggerName);
 }

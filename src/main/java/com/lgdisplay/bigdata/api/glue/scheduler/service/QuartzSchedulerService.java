@@ -3,19 +3,21 @@ package com.lgdisplay.bigdata.api.glue.scheduler.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lgdisplay.bigdata.api.glue.scheduler.jobs.StartJob;
-import com.lgdisplay.bigdata.api.glue.scheduler.model.Job;
-import com.lgdisplay.bigdata.api.glue.scheduler.model.Run;
+import com.lgdisplay.bigdata.api.glue.scheduler.model.*;
 
+import com.lgdisplay.bigdata.api.glue.scheduler.model.Job;
 import com.lgdisplay.bigdata.api.glue.scheduler.repository.JobRepository;
 import com.lgdisplay.bigdata.api.glue.scheduler.repository.RunRepository;
 import com.lgdisplay.bigdata.api.glue.scheduler.repository.TriggerRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.*;
+import org.quartz.Trigger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -47,15 +49,43 @@ public class QuartzSchedulerService {
     @Qualifier("mapper")
     ObjectMapper mapper;
 
+    public String getTriggerType(Run run){
+        Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> optTrigger
+                =triggerRepository.findByName(run.getTriggerName());
+        com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger= optTrigger.get();
+        return trigger.getType();
+    }
+
     public String  saveRun(Run run) {
         runRepository.save(run);
         return run.getJobRunId();
     }
+    //1 triggerRepository를 뒤져서 jobName을 가져온다.
+    //2 loop를 돌려서 저장한다.
+    public void  saveMultiRun(Run run) throws Exception{
+        List<Job> jobList=jobRepository.findJobNameByTriggerNameParamsNative(run.getTriggerName());
+        for (Job job:jobList) {
+            String jobRunId = "JOB_" + System.currentTimeMillis();
+            run.setJobName(job.getJobName());
+            run.setJobRunId(jobRunId);
+            runRepository.save(run);
+        }
+    }
 
+
+    public void  updateRunStatus(Run run,String Status) {
+        run.setJobRunState(JobRunStateEnum.valueOf(Status).name());
+        runRepository.save(run);
+    }
+    public  void  updateTriggerStatus(Run run,String Status) {
+        Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> optTrigger
+        =triggerRepository.findByName(run.getTriggerName());
+        com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger= optTrigger.get();
+        trigger.setTriggerState(TriggerStateEnum.valueOf(Status).name());
+        triggerRepository.save(trigger);
+    }
     public String startJobRun(Run run) throws SchedulerException {
         Scheduler scheduler = schedulerFactoryBean.getScheduler();
-
-        JobKey jobKey=new JobKey(run.getJobName(),"Group");
 
         Trigger trigger = TriggerBuilder.newTrigger()
                 .withIdentity(run.getJobName(), run.getUserName())
@@ -64,7 +94,6 @@ public class QuartzSchedulerService {
                 .build();
 
         scheduler.scheduleJob(trigger);
-
         return run.getJobRunId();
     }
 
@@ -127,37 +156,57 @@ public class QuartzSchedulerService {
         Scheduler scheduler = schedulerFactoryBean.getScheduler();
         Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> trigger
                 = triggerRepository.findByName(paramMap.get("triggerName"));
-
         if (!trigger.isPresent()) {
             log.error("Trigger Not Found !");
             return "FAIL";
         }
         Optional<Run> run = runRepository.findByTriggerId(trigger.get().getTriggerId());
-        if (!trigger.isPresent()) {
+        if (run.isPresent()) {
             if (run.get().getJobRunState().equals("RUNNING")) {
                 log.error("Trigger is already running !");
                 return "FAIL";
             }
         }
-        String cronStr=trigger.get().getSchedule();
+        String type=trigger.get().getType();
+        List<Job> jobList=jobRepository.findJobNameByTriggerNameParamsNative(paramMap.get("triggerName"));
+            JobKey jobKey = new JobKey(jobList.get(0).getJobName(), jobList.get(0).getUsername());
+            if (type.equals(TriggerTypeEnum.SCHEDULED.name())) {
+                createCronTrigger(paramMap, scheduler, trigger, jobKey);
+            }else{
+                createOneTimeTrigger(paramMap, scheduler, jobKey);
+            }
+        return trigger.get().getTriggerId();
+    }
 
-        cronStr = cronStr.replace("cron(", "").replace(")", "");
-        JobKey jobKey = new JobKey(trigger.get().getJobName(), trigger.get().getUserName());
+    //ON_DEMAND TRIGGER 생성
+    private void createOneTimeTrigger(Map<String, String> paramMap, Scheduler scheduler, JobKey jobKey)
+            throws SchedulerException {
+        Trigger qurtzTrigger = TriggerBuilder.newTrigger()
+                .withIdentity(paramMap.get("triggerName"), paramMap.get("userName").toUpperCase())
+                .startNow()
+                .forJob(jobKey)
+                .build();
+        scheduler.scheduleJob(qurtzTrigger);
+    }
+
+    //CRON TAB TRIGGER 생성
+    private void createCronTrigger(Map<String, String> paramMap,
+                                   Scheduler scheduler,
+                                   Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> trigger,
+                                   JobKey jobKey) throws SchedulerException {
+        String cronStr=trigger.get().getSchedule();
         CronTrigger cronTrigger = TriggerBuilder.newTrigger()
                 .withIdentity(paramMap.get("triggerName"),paramMap.get("userName").toUpperCase())
                 .withSchedule(CronScheduleBuilder.cronSchedule(cronStr))
                 .forJob(jobKey)
                 .build();
-
         scheduler.scheduleJob(cronTrigger);
-        return trigger.get().getTriggerId();
     }
 
 
     public String stopTrigger(String triggerId) throws SchedulerException, JsonProcessingException {
         Scheduler scheduler = schedulerFactoryBean.getScheduler();
         try {
-
             Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> triggerById
                     = triggerRepository.findById(triggerId);
             if (!triggerById.isPresent()) {
@@ -167,11 +216,10 @@ public class QuartzSchedulerService {
             scheduler.unscheduleJob(TriggerKey.triggerKey(trigger.getName(), trigger.getUserName()));
             Optional<Run> runByTriggerId = runRepository.findByTriggerId(triggerId);
             Run run = runByTriggerId.get();
-            run.setJobRunState("STOPED");
+            run.setJobRunState(JobRunStateEnum.STOPPED.name());
             runRepository.save(run);
-            trigger.setTriggerState("STOPED");
+            trigger.setTriggerState(TriggerStateEnum.STOPPED.name());
             triggerRepository.save(trigger);
-
         } catch (Exception e) {
             log.error(e.getMessage());
         }
@@ -188,15 +236,17 @@ public class QuartzSchedulerService {
                 return "FAIL";
             }
             com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger=triggerById.get();
-            if(trigger.getTriggerState().equals("RUNNING")) {
-                scheduler.unscheduleJob(TriggerKey.triggerKey(trigger.getName(), trigger.getUserName()));
-                Optional<Run> runByTriggerId = runRepository.findByTriggerId(triggerId);
-                Run run = runByTriggerId.get();
-                run.setJobRunState("DELETED");
-                runRepository.save(run);
+            if(trigger.getTriggerState().equals(TriggerStateEnum.RUNNING.name())) {
+                return "FAIL";
             }
 
+            scheduler.unscheduleJob(TriggerKey.triggerKey(trigger.getName(), trigger.getUserName()));
+            Optional<Run> runByTriggerId = runRepository.findByTriggerId(triggerId);
             triggerRepository.delete(trigger);
+            if(!trigger.getTriggerState().equals(TriggerStateEnum.STANDBY.name())) {
+                Run run = runByTriggerId.get();
+                updateRunStatus(run, JobRunStateEnum.DELETED.name());
+            }
 
         } catch (Exception e) {
             log.error(e.getMessage());

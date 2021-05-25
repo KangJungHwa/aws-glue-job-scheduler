@@ -3,9 +3,10 @@ package com.lgdisplay.bigdata.api.glue.scheduler.controller;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lgdisplay.bigdata.api.glue.scheduler.jobs.StartJob;
-import com.lgdisplay.bigdata.api.glue.scheduler.model.Run;
+import com.lgdisplay.bigdata.api.glue.scheduler.model.*;
 import com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger;
 import com.lgdisplay.bigdata.api.glue.scheduler.model.http.StartJobRunRequest;
+import com.lgdisplay.bigdata.api.glue.scheduler.repository.TriggerRepository;
 import com.lgdisplay.bigdata.api.glue.scheduler.service.QuartzSchedulerService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -42,7 +43,6 @@ public class SchedulerController extends DefaultController {
     @Qualifier("mapper")
     ObjectMapper mapper;
 
-
     /*완료*/
     @PostMapping("/job")
     @ApiOperation(value = "Job 등록", notes = "Job을 등록합니다.")
@@ -61,17 +61,15 @@ public class SchedulerController extends DefaultController {
     @PostMapping("/start/job")
     @ApiOperation(value = "Job 시작", notes = "Job을 한번만 실행합니다.")
     public ResponseEntity startJobRun(HttpServletRequest request,@RequestBody Map params) throws Exception  {
-        log.info("{}", params);
+
         String jobRunId=params.get("jobRunId").toString();
         StartJobRunRequest startJobRunRequest = mapper.readValue(params.get("body").toString(), StartJobRunRequest.class);
 
         Run startJobRun = Run.builder()
                 .jobRunId(jobRunId)
                 .jobName(startJobRunRequest.getJobName())
-                .arguments(params.get("arguments").toString())
-                .jobRunState("STARTED")
-                .userName(params.get("userName").toString())
-                .body(params.get("body").toString()).build();
+                .jobRunState(JobRunStateEnum.STARTING.name())
+                .userName(params.get("userName").toString()).build();
 
         //TODO
         // 아래에서 JOB 실행시키고 STATE 코드 RUNNING FINISH 업데이트 시키는 로직추가
@@ -80,10 +78,10 @@ public class SchedulerController extends DefaultController {
             schedulerService.saveRun(startJobRun);
             //QUARTZ TRIGGER 테이블 저장
             schedulerService.startJobRun(startJobRun);
-            startJobRun.setJobRunState("COMPLETE");
+            startJobRun.setJobRunState(JobRunStateEnum.SUCCEEDED.name());
             schedulerService.saveRun(startJobRun);
         } catch (Exception e) {
-            startJobRun.setJobRunState("FAILED");
+            startJobRun.setJobRunState(JobRunStateEnum.FAILED.name());
             schedulerService.saveRun(startJobRun);
         }
 
@@ -97,15 +95,17 @@ public class SchedulerController extends DefaultController {
 
         String triggerId=schedulerService.addTrigger(params);
         String jobRunId = "JOB_" + System.currentTimeMillis();
-
         Run startJobRun = Run.builder()
                 .jobRunId(jobRunId)
                 .jobName(params.get("jobName"))
-                .jobRunState("RUNNING")
+                .jobRunState(JobRunStateEnum.RUNNING.name())
                 .triggerId(triggerId)
+                .triggerName(params.get("triggerName"))
                 .userName(params.get("userName").toUpperCase())
                 .build();
-        schedulerService.saveRun(startJobRun);
+        if(schedulerService.getTriggerType(startJobRun).equals(TriggerTypeEnum.ON_DEMAND.name())) {
+            schedulerService.updateTriggerStatus(startJobRun, TriggerStateEnum.SUCCEEDED.name());
+        }
         return ResponseEntity.ok(_true());
     }
 
@@ -116,13 +116,12 @@ public class SchedulerController extends DefaultController {
         return ResponseEntity.ok(_true());
     }
 
-
-
-
-
-
-
-
+    @PutMapping("/trigger/stop/{triggerId}")
+    @ApiOperation(value = "Trigger 정지", notes = "Trigger을 정지합니다.")
+    public ResponseEntity stopTrigger(HttpServletRequest request,  @PathVariable("triggerId") String triggerId) throws SchedulerException, JsonProcessingException {
+        schedulerService.stopTrigger(triggerId);
+        return ResponseEntity.ok(_true());
+    }
 
 
 

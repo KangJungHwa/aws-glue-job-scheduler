@@ -31,11 +31,10 @@ public interface TriggerRepository extends JpaRepository<Trigger, String> {
     @Query(value = "SELECT name FROM api_glue_trigger", nativeQuery = true)
     List<String> findListAllTriggersLimitN(Pageable pageable);
 
-
-
     @Query("FROM com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger t WHERE t.name = :name ")
     List<Trigger> findAllByNameLimitN(@Param("name") String name, Pageable pageable);
 
     @Query("FROM com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger t ")
     List<Trigger> findAllLimitN(Pageable pageable);
+
 }

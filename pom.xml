@@ -39,12 +39,25 @@
 
         <plugins>
             <plugin>
+<!--                <groupId>org.springframework.boot</groupId>-->
+<!--                <artifactId>spring-boot-maven-plugin</artifactId>-->
+<!--                <version>${spring.boot.version}</version>-->
+<!--                <configuration>-->
+<!--                    <executable>true</executable>-->
+<!--                </configuration>-->
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>${spring.boot.version}</version>
                 <configuration>
-                    <executable>true</executable>
+                    <mainClass>com.lgdisplay.bigdata.api.glue.scheduler.Starter</mainClass>
                 </configuration>
+
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
 
             <plugin>
@@ -52,8 +65,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${maven.compiler.version}</version>
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <source>9</source>
+                    <target>9</target>
                     <encoding>UTF-8</encoding>
                     <annotationProcessors>
                         <annotationProcessor>lombok.launch.AnnotationProcessorHider$AnnotationProcessor</annotationProcessor>
@@ -120,14 +133,14 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
+            <version>42.2.18</version>
         </dependency>
 
-        <dependency>
-            <groupId>mysql</groupId>
-            <artifactId>mysql-connector-java</artifactId>
-            <version>${mysql.version}</version>
-        </dependency>
+<!--                <dependency>-->
+<!--                    <groupId>mysql</groupId>-->
+<!--                    <artifactId>mysql-connector-java</artifactId>-->
+<!--                    <version>${mysql.version}</version>-->
+<!--                </dependency>-->
 
         <dependency>
             <groupId>com.zaxxer</groupId>

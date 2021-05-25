@@ -1,6 +1,8 @@
 spring:
+  profiles:
+    active: local
   application:
-    name: GMAIL-MIGRATOR
+    name: AWS-GLUE-JOB-SCHEDULER
 
   #################
   ## JPA
@@ -20,30 +22,40 @@ spring:
           lob:
             non_contextual_creation: true
     open-in-view: false
-    database: mysql
+    database: postgresql
+    #database: mysql
 
   #################
   ## DataSource
   #################
 
   datasource:
-    #url: jdbc:postgresql://localhost:5432/test
-    #driver-class-name: org.postgresql.Driver
-    #username: postgres
-    #password: postgres
-    url: jdbc:log4jdbc:mysql://localhost:3306/glue?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
-    driver-class-name: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
-    username: root
+    #url: jdbc:postgresql://192.168.21.61:5432/lgddnaapip?currentSchema=api
+    url: jdbc:postgresql://localhost:5432/glue?currentSchema=public
+    username: postgres
     password: root
+    driver-class-name: org.postgresql.Driver
+    connection-test-query: SELECT 1
+    maximum-pool-size: 10
+    minimum-idle: 3
     sql-script-encoding: UTF-8
     continue-on-error: true
     initialization-mode: always
-    hikari:
-      connection-test-query: SELECT 1
-      maximum-pool-size: 10
-      max-lifetime: 1800000
-      minimum-idle: 10
-      idle-timeout: 600000
+#    url: jdbc:log4jdbc:mysql://localhost:3306/glue?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+#    driver-class-name: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
+#    url: jdbc:mysql://localhost:3306/glue?serverTimezone=UTC
+#    driver-class-name: com.mysql.cj.jdbc.Driver
+#    username: root
+#    password: root
+#    sql-script-encoding: UTF-8
+#    continue-on-error: true
+#    initialization-mode: always
+#    hikari:
+#      connection-test-query: SELECT 1
+#      maximum-pool-size: 10
+#      max-lifetime: 1800000
+#      minimum-idle: 10
+#      idle-timeout: 600000
 
 
   #################
@@ -73,5 +85,7 @@ app:
 #################
 
 logging:
-  config: src/main/resources/logback-local.xml
+  #config: src/main/resources/logback-local.xml
+  #config: c:\\app\logback-prod.xml
+  config: /data/apps/glue/logback-prod.xml
 
