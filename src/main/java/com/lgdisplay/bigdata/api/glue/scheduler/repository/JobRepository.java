@@ -11,6 +11,8 @@ import java.util.Optional;
 
 public interface JobRepository extends CrudRepository<Job, Long> {
 
+    Optional<Job> findByJobName(String jobName);
+
     Optional<Job> findByUsernameAndJobName(String username, String jobName);
 
     @Query("FROM com.lgdisplay.bigdata.api.glue.scheduler.model.Job j WHERE j.username = :username  ORDER BY j.createDate DESC")

@@ -10,6 +10,7 @@ import com.lgdisplay.bigdata.api.glue.scheduler.repository.JobRepository;
 import com.lgdisplay.bigdata.api.glue.scheduler.repository.RunRepository;
 import com.lgdisplay.bigdata.api.glue.scheduler.repository.TriggerRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
 import org.quartz.*;
 import org.quartz.Trigger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 import org.springframework.stereotype.Service;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -73,14 +76,8 @@ public class QuartzSchedulerService {
     }
 
 
-    public void  updateRunStatus(Run run,String Status) {
-        run.setJobRunState(JobRunStateEnum.valueOf(Status).name());
-        runRepository.save(run);
-    }
-    public  void  updateTriggerStatus(Run run,String Status) {
-        Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> optTrigger
-        =triggerRepository.findByName(run.getTriggerName());
-        com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger= optTrigger.get();
+
+    public  void  updateTriggerStatus(com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger, String Status) {
         trigger.setTriggerState(TriggerStateEnum.valueOf(Status).name());
         triggerRepository.save(trigger);
     }
@@ -154,28 +151,25 @@ public class QuartzSchedulerService {
     // 저장된 job의 트리거를 등록한다.
     public String addTrigger(Map<String,String> paramMap) throws SchedulerException, JsonProcessingException {
         Scheduler scheduler = schedulerFactoryBean.getScheduler();
-        Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> trigger
+        Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> optionalTrigger
                 = triggerRepository.findByName(paramMap.get("triggerName"));
-        if (!trigger.isPresent()) {
+        if (!optionalTrigger.isPresent()) {
             log.error("Trigger Not Found !");
             return "FAIL";
         }
-        Optional<Run> run = runRepository.findByTriggerId(trigger.get().getTriggerId());
-        if (run.isPresent()) {
-            if (run.get().getJobRunState().equals("RUNNING")) {
-                log.error("Trigger is already running !");
-                return "FAIL";
-            }
-        }
-        String type=trigger.get().getType();
+        com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger=optionalTrigger.get();
+
+        String type=trigger.getType();
         List<Job> jobList=jobRepository.findJobNameByTriggerNameParamsNative(paramMap.get("triggerName"));
             JobKey jobKey = new JobKey(jobList.get(0).getJobName(), jobList.get(0).getUsername());
             if (type.equals(TriggerTypeEnum.SCHEDULED.name())) {
                 createCronTrigger(paramMap, scheduler, trigger, jobKey);
+                updateTriggerStatus(trigger, TriggerStateEnum.RUNNING.name());
             }else{
                 createOneTimeTrigger(paramMap, scheduler, jobKey);
+                updateTriggerStatus(trigger, TriggerStateEnum.SUCCEEDED.name());
             }
-        return trigger.get().getTriggerId();
+        return trigger.getTriggerId();
     }
 
     //ON_DEMAND TRIGGER 생성
@@ -192,9 +186,9 @@ public class QuartzSchedulerService {
     //CRON TAB TRIGGER 생성
     private void createCronTrigger(Map<String, String> paramMap,
                                    Scheduler scheduler,
-                                   Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> trigger,
+                                   com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger,
                                    JobKey jobKey) throws SchedulerException {
-        String cronStr=trigger.get().getSchedule();
+        String cronStr=trigger.getSchedule();
         CronTrigger cronTrigger = TriggerBuilder.newTrigger()
                 .withIdentity(paramMap.get("triggerName"),paramMap.get("userName").toUpperCase())
                 .withSchedule(CronScheduleBuilder.cronSchedule(cronStr))
@@ -207,17 +201,14 @@ public class QuartzSchedulerService {
     public String stopTrigger(String triggerId) throws SchedulerException, JsonProcessingException {
         Scheduler scheduler = schedulerFactoryBean.getScheduler();
         try {
-            Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> triggerById
+            Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> optionalTrigger
                     = triggerRepository.findById(triggerId);
-            if (!triggerById.isPresent()) {
+            if (!optionalTrigger.isPresent()) {
                 return "FAIL";
             }
-            com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger=triggerById.get();
+            com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger=optionalTrigger.get();
             scheduler.unscheduleJob(TriggerKey.triggerKey(trigger.getName(), trigger.getUserName()));
-            Optional<Run> runByTriggerId = runRepository.findByTriggerId(triggerId);
-            Run run = runByTriggerId.get();
-            run.setJobRunState(JobRunStateEnum.STOPPED.name());
-            runRepository.save(run);
+
             trigger.setTriggerState(TriggerStateEnum.STOPPED.name());
             triggerRepository.save(trigger);
         } catch (Exception e) {
@@ -230,24 +221,19 @@ public class QuartzSchedulerService {
         Scheduler scheduler = schedulerFactoryBean.getScheduler();
         try {
 
-            Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> triggerById
+            Optional<com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger> optionalTrigger
                     = triggerRepository.findById(triggerId);
-            if (!triggerById.isPresent()) {
+            if (!optionalTrigger.isPresent()) {
                 return "FAIL";
             }
-            com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger=triggerById.get();
+            com.lgdisplay.bigdata.api.glue.scheduler.model.Trigger trigger=optionalTrigger.get();
             if(trigger.getTriggerState().equals(TriggerStateEnum.RUNNING.name())) {
                 return "FAIL";
             }
 
             scheduler.unscheduleJob(TriggerKey.triggerKey(trigger.getName(), trigger.getUserName()));
-            Optional<Run> runByTriggerId = runRepository.findByTriggerId(triggerId);
-            triggerRepository.delete(trigger);
-            if(!trigger.getTriggerState().equals(TriggerStateEnum.STANDBY.name())) {
-                Run run = runByTriggerId.get();
-                updateRunStatus(run, JobRunStateEnum.DELETED.name());
-            }
 
+            triggerRepository.delete(trigger);
         } catch (Exception e) {
             log.error(e.getMessage());
         }
@@ -284,67 +270,19 @@ public class QuartzSchedulerService {
     }
 
 
-//    public JobEntity getJobEntityById(Integer id) {
-//        return repository.getById(id);
-//    }
-//
-//
-//    /**
-//     */
-//    public Integer create(JobEntity jobEntity){
-//
-//        repository.save(jobEntity);
-//        return jobEntity.getId();
-//    }
-//    /**
-//     */
-//    public Integer pause(JobEntity jobEntity){
-//
-//        repository.save(jobEntity);
-//        return jobEntity.getId();
-//    }
-//    /**
-//     */
-//    public Integer delete(JobEntity jobEntity){
-//        repository.delete(jobEntity);
-//        return jobEntity.getId();
-//    }
-//
-//    public List<JobEntity> loadJobs() {
-//        return repository.findAll();
-//    }
-//
-//    public JobDataMap getJobDataMap(JobEntity job) {
-//        JobDataMap map = new JobDataMap();
-//        map.put("name", job.getName());
-//        map.put("jobGroup", job.getJobGroup());
-//        map.put("cronExpression", job.getCron());
-//        map.put("parameter", job.getParameter());
-//        map.put("jobDescription", job.getDescription());
-//        map.put("vmParam", job.getVmParam());
-//        map.put("jarPath", job.getJarPath());
-//        map.put("status", job.getStatus());
-//        return map;
-//    }
-//    public JobDetail getJobDetail(JobKey jobKey, String description, JobDataMap map) {
-//        return JobBuilder.newJob(DynamicJob.class)
-//                .withIdentity(jobKey)
-//                .withDescription(description)
-//                .setJobData(map)
-//                .storeDurably()
-//                .build();
-//    }
-//
-//
-//    public Trigger getTrigger(JobEntity job) {
-//        return TriggerBuilder.newTrigger()
-//                .withIdentity(job.getName(), job.getJobGroup())
-//                .withSchedule(CronScheduleBuilder.cronSchedule(job.getCron()))
-//                .build();
-//    }
-//
-//
-//    public JobKey getJobKey(JobEntity job) {
-//        return JobKey.jobKey(job.getName(), job.getJobGroup());
-//    }
+   public String copyPublicStorage(String userName)  {
+       try {
+           //TODO 배포시 아래경로 리눅스 스타일로 변경할 것
+           String sourceDirectoryLocation = "C:/mnt/" + userName + "/Documents/";
+           //TODO 아래부분의 경로는 확정되면 수정할 것
+           String destinationDirectoryLocation = "C:/DEV/" + userName + "/Documents/";
+           File sourceDirectory = new File(sourceDirectoryLocation);
+           File destinationDirectory = new File(destinationDirectoryLocation);
+           FileUtils.copyDirectory(sourceDirectory, destinationDirectory);
+           return "OK";
+       } catch (IOException e) {
+           log.error(e.toString());
+           return "ERROR";
+       }
+   }
 }

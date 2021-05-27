@@ -53,7 +53,8 @@ public class SchedulerController extends DefaultController {
             log.warn("요청을 처리하기 위해서 필요한 jobId가 존재하지 않습니다.");
             return ResponseEntity.ok(_false());
         }
-        String returnVal=schedulerService.addJob(userName, jobName);
+        schedulerService.addJob(userName, jobName);
+        schedulerService.copyPublicStorage(userName);
         return ResponseEntity.ok(_true());
     }
 
@@ -74,15 +75,11 @@ public class SchedulerController extends DefaultController {
         //TODO
         // 아래에서 JOB 실행시키고 STATE 코드 RUNNING FINISH 업데이트 시키는 로직추가
         try {
-            //RUN 테이블 저장
-            schedulerService.saveRun(startJobRun);
-            //QUARTZ TRIGGER 테이블 저장
+
             schedulerService.startJobRun(startJobRun);
-            startJobRun.setJobRunState(JobRunStateEnum.SUCCEEDED.name());
-            schedulerService.saveRun(startJobRun);
+
         } catch (Exception e) {
-            startJobRun.setJobRunState(JobRunStateEnum.FAILED.name());
-            schedulerService.saveRun(startJobRun);
+            return ResponseEntity.status(500).build();
         }
 
         return ResponseEntity.ok(jobRunId);
@@ -103,9 +100,7 @@ public class SchedulerController extends DefaultController {
                 .triggerName(params.get("triggerName"))
                 .userName(params.get("userName").toUpperCase())
                 .build();
-        if(schedulerService.getTriggerType(startJobRun).equals(TriggerTypeEnum.ON_DEMAND.name())) {
-            schedulerService.updateTriggerStatus(startJobRun, TriggerStateEnum.SUCCEEDED.name());
-        }
+
         return ResponseEntity.ok(_true());
     }
 
