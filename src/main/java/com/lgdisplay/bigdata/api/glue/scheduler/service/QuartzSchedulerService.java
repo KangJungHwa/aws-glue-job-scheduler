@@ -270,19 +270,5 @@ public class QuartzSchedulerService {
     }
 
 
-   public String copyPublicStorage(String userName)  {
-       try {
-           //TODO 배포시 아래경로 리눅스 스타일로 변경할 것
-           String sourceDirectoryLocation = "C:/mnt/" + userName + "/Documents/";
-           //TODO 아래부분의 경로는 확정되면 수정할 것
-           String destinationDirectoryLocation = "C:/DEV/" + userName + "/Documents/";
-           File sourceDirectory = new File(sourceDirectoryLocation);
-           File destinationDirectory = new File(destinationDirectoryLocation);
-           FileUtils.copyDirectory(sourceDirectory, destinationDirectory);
-           return "OK";
-       } catch (IOException e) {
-           log.error(e.toString());
-           return "ERROR";
-       }
-   }
+
 }

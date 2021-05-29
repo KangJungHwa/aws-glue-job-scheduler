@@ -54,7 +54,8 @@ public class SchedulerController extends DefaultController {
             return ResponseEntity.ok(_false());
         }
         schedulerService.addJob(userName, jobName);
-        schedulerService.copyPublicStorage(userName);
+
+
         return ResponseEntity.ok(_true());
     }
 
@@ -129,11 +130,6 @@ public class SchedulerController extends DefaultController {
     @PostMapping("/job/update/{jobId}")
     @ApiOperation(value = "Job 수정", notes = "Job을 수정합니다.")
     public ResponseEntity update(HttpServletRequest request, @PathVariable("jobId") Long jobId) throws SchedulerException {
-        /*if (jobId==null) {
-            log.warn("요청을 처리하기 위해서 필요한 jobId가 존재하지 않습니다.");
-            return ResponseEntity.ok(_false());
-        }
-        schedulerService.updateJob(jobId);*/
         return ResponseEntity.ok(_true());
     }
 
