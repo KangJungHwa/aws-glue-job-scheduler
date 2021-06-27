@@ -6,6 +6,7 @@ import com.lgdisplay.bigdata.api.glue.scheduler.repository.JobRepository;
 import com.lgdisplay.bigdata.api.glue.scheduler.repository.TriggerRepository;
 import com.lgdisplay.bigdata.api.glue.scheduler.service.QuartzSchedulerService;
 import com.lgdisplay.bigdata.api.glue.scheduler.util.ApplicationContextHolder;
+import com.lgdisplay.bigdata.api.glue.scheduler.util.OutputHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -124,17 +125,30 @@ public class StartJob implements Job {
                 }
 
                 Process p = pb.start();
+                OutputHandler out
+                    = new OutputHandler(p.getInputStream(), "euc-kr");
+                OutputHandler err
+                    = new OutputHandler(p.getErrorStream(), "euc-kr");
+
                 pid = p.pid();
                 //pid 저장
                 startJobRun.setPid(pid);
                 schedulerService.saveRun(startJobRun);
-
-                InputStream inputStream = p.getInputStream();
-                BufferedReader br = new BufferedReader(new InputStreamReader(inputStream, "euc-kr"));
-                String line = null;
-                if ((line = br.readLine()) != null) {
-                    log.info("~~~~~~~~~~~~~~스크립트 실행 내역~~~~~~~~~~~~~~~~" + line);
+                int status = p.waitFor();
+                out.join();
+                err.join();
+                if (status != 0) {
+                    System.out.println("Error:");
+                    System.out.println(err.getText());
+                    startJobRun.setJobRunState(JobRunStateEnum.FAILED.name());
+                    schedulerService.saveRun(startJobRun);
+                    return;
                 }
+
+                System.out.println("Output:");
+                System.out.println(out.getText());
+                System.out.println();
+
         } catch (Exception e) {
             //에러가 발생하면 run에 fail을 입력
             startJobRun.setJobRunState(JobRunStateEnum.FAILED.name());
@@ -145,6 +159,7 @@ public class StartJob implements Job {
         startJobRun.setJobRunState(JobRunStateEnum.SUCCEEDED.name());
         schedulerService.saveRun(startJobRun);
     }
+
 
     public boolean fileExistsCheck(String location) {
         File f = new File(location);

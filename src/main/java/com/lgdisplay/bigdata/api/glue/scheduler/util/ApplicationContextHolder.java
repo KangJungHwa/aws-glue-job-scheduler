@@ -22,4 +22,8 @@ public class ApplicationContextHolder implements ApplicationContextAware {
         return applicationCont;
     }
 
+    public String[] wholeBeanNames(){
+        String[] beanNames = ApplicationContextHolder.get().getBeanDefinitionNames();
+        return beanNames;
+    }
 }

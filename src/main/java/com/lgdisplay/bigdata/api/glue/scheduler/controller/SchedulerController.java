@@ -99,7 +99,7 @@ public class SchedulerController extends DefaultController {
                 .jobRunState(JobRunStateEnum.RUNNING.name())
                 .triggerId(triggerId)
                 .triggerName(params.get("triggerName"))
-                .userName(params.get("userName").toUpperCase())
+                .userName(params.get("userName"))
                 .build();
 
         return ResponseEntity.ok(_true());

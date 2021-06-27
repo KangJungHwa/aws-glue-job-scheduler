@@ -176,7 +176,7 @@ public class QuartzSchedulerService {
     private void createOneTimeTrigger(Map<String, String> paramMap, Scheduler scheduler, JobKey jobKey)
             throws SchedulerException {
         Trigger qurtzTrigger = TriggerBuilder.newTrigger()
-                .withIdentity(paramMap.get("triggerName"), paramMap.get("userName").toUpperCase())
+                .withIdentity(paramMap.get("triggerName"), paramMap.get("userName"))
                 .startNow()
                 .forJob(jobKey)
                 .build();
@@ -190,7 +190,7 @@ public class QuartzSchedulerService {
                                    JobKey jobKey) throws SchedulerException {
         String cronStr=trigger.getSchedule();
         CronTrigger cronTrigger = TriggerBuilder.newTrigger()
-                .withIdentity(paramMap.get("triggerName"),paramMap.get("userName").toUpperCase())
+                .withIdentity(paramMap.get("triggerName"),paramMap.get("userName"))
                 .withSchedule(CronScheduleBuilder.cronSchedule(cronStr))
                 .forJob(jobKey)
                 .build();
